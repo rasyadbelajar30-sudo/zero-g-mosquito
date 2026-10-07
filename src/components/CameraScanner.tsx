@@ -104,6 +104,7 @@ ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
   * scientificExplanation: "Lensa kamera tertutup atau pencahayaan terlalu gelap. Tidak ada wadah air, genangan, ataupun sarang nyamuk yang terlihat."
   * actionSteps: ["Buka penutup kamera atau bersihkan lensa.", "Arahkan kamera ke gantungan baju untuk memeriksa resting site, atau ke wadah air untuk memeriksa jentik."]
   * JANGAN PERNAH MENGASUMSIKAN ATAU MENGARANG ADA WADAH AIR JIKA OBJEK FISIK TIDAK TAMPAK JELAS!
+  * PERINGATAN: Baju gelap, jaket hitam, tas, atau pakaian yang tergantung di sudut ruangan BUKANLAH KAMERA TERTUTUP! Jika tampak pakaian/kain gelap, itu adalah objek nyata berkategori "vektor_istirahat" (resting site nyamuk dewasa). Kamera tertutup HANYA berlaku jika sensor benar-benar ditutup jari/meja hingga tidak ada objek apapun!
 
 TAHAP 1: KLASIFIKASI ENTITAS & SIKLUS HIDUP (entityCategory):
 Pilihlah salah satu dari 5 kategori berikut:
@@ -211,6 +212,7 @@ ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
   * scientificExplanation: "Kamera tertutup atau frame terlalu gelap. Tidak ada genangan air ataupun motilitas jentik hidup."
   * actionSteps: ["Pastikan lensa kamera tidak tertutup.", "Arahkan kamera ke gantungan baju atau air genangan."]
   * JANGAN PERNAH MENGARANG ADA SARANG/BAK MANDI PADA GAMBAR GELAP/TERTUTUP!
+  * PERINGATAN: Baju gelap, jaket hitam, tas, atau pakaian yang tergantung di sudut ruangan BUKANLAH KAMERA TERTUTUP! Jika tampak pakaian/kain gelap, itu adalah objek nyata berkategori "vektor_istirahat" (resting site nyamuk dewasa). Kamera tertutup HANYA berlaku jika sensor benar-benar ditutup rapat!
 
 TAHAP 1: KLASIFIKASI ENTITAS (entityCategory):
 Pilihlah salah satu dari 5 kategori berikut:
