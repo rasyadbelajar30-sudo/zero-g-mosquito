@@ -229,9 +229,17 @@ KUALITAS TATA BAHASA & ADAPTABILITAS KEBUTUHAN PENGGUNA (CRITICAL MANDATE):
 4. EKSPLORASI SEMUA TAHUN & PEMODELAN PREDIKTIF:
    - Jelajahi semua tahun tanpa batasan (Masa Lalu, Masa Kini ${currentYear}, dan Masa Depan 2026, 2027, 2030+).
    - Buat peramalan dan analisis prediktif berbasis pemodelan tren (Skenario Optimis, Moderat, dan Pesimis) jika ditanyakan data/tren masa depan.
-5. SPESIALISASI KESEHATAN MASYARAKAT & UMUM:
+5. SPESIALISASI KESEHATAN MASYARAKAT & ENTOMOLOGI:
    - Layani topik kesehatan (nyamuk, DBD, sanitasi) maupun topik umum (sains, teknologi, kehidupan) dengan ramah, cerdas, dan solutif.
-6. KONTINUITAS & FOKUS PERCAKAPAN:
+6. LOGIKA PEMUTUS SIKLUS HIDUP NYAMUK (MOSQUITO CYCLE BREAKER):
+   - Kuasai 4 tahapan siklus hidup nyamuk:
+     a. Telur: Dorman & tahan kering hingga 6 bulan di wadah/ember kosong (Putus siklus: sikat dinding wadah & balikkan).
+     b. Jentik (Larva): Aktif di air 6-8 hari (Putus siklus: kuras seminggu sekali, larvasida abate, ikan cupang).
+     c. Pupa: Kepompong air 1-2 hari sebelum terbang menjadi nyamuk dewasa.
+     d. Nyamuk Dewasa (Imago): Istirahat di GANTUNGAN BAJU / PAKAIAN BEKAS PAKAI di balik pintu atau kamar tidur.
+   - Pahami fakta ilmiah bahwa GANTUNGAN BAJU ADALAH RESTING SITE SANGAT BERBAHAYA bagi nyamuk Aedes aegypti (penarik utama karena bau asam laktat & keringat tubuh).
+   - Selalu berikan solusi nyata untuk MEMUTUS SIKLUS HIDUP NYAMUK secara menyeluruh.
+7. KONTINUITAS & FOKUS PERCAKAPAN:
    - Jaga fokus pada subjek aktif terakhir tanpa mencampurkan topik lama yang tidak relevan.`;
 }
 
@@ -314,6 +322,42 @@ async function searchInternet(query: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Sanitize and align conversation history for Google Gemini multi-turn chat:
+ * 1. Exclude welcome greetings, error messages, and empty messages.
+ * 2. Strictly enforce alternating roles: 'user' -> 'model' -> 'user' -> 'model'.
+ * 3. Ensure history ends with 'model' (as next turn will be 'user' via chat.sendMessage).
+ * 4. Maintain a sliding window of the latest 10 messages (5 turn pairs) for sharp, fast context.
+ */
+function buildSanitizedHistory(pastMessages: ChatMessage[]): Content[] {
+  const cleanMessages = pastMessages.filter(
+    (m) => m.id !== WELCOME_ID && !m.isError && m.text.trim().length > 0
+  );
+
+  const history: Content[] = [];
+  let expectedRole: 'user' | 'model' = 'user';
+
+  for (const msg of cleanMessages) {
+    if (msg.role === expectedRole) {
+      const textPart = msg.attachment
+        ? `[Lampiran Media: ${msg.attachment.name} (${msg.attachment.type})]\n${msg.text}`
+        : msg.text;
+      history.push({
+        role: msg.role,
+        parts: [{ text: textPart }]
+      });
+      expectedRole = expectedRole === 'user' ? 'model' : 'user';
+    }
+  }
+
+  // startChat history MUST end with 'model' because chat.sendMessage() supplies the new 'user' turn
+  while (history.length > 0 && history[history.length - 1].role !== 'model') {
+    history.pop();
+  }
+
+  return history.slice(-10);
 }
 
 export interface MosquitoAIProps {
@@ -598,16 +642,8 @@ export default function MosquitoAI({
       setSessions(intermediateSessions);
       saveAllSessions(intermediateSessions);
 
-      // Maintain sliding window of last 12 messages from THIS SESSION ONLY (isolated context)
-      const validHistory: Content[] = updatedMessages
-        .filter((m) => m.id !== WELCOME_ID && !m.isError)
-        .slice(-12)
-        .map((m) => {
-          const textPart = m.attachment
-            ? `[Lampiran File/Media Pengguna: ${m.attachment.name} (${m.attachment.type})]\n${m.text}`
-            : m.text;
-          return { role: m.role, parts: [{ text: textPart }] };
-        });
+      // Maintain sliding window of strictly alternating past context prior to current question
+      const validHistory = buildSanitizedHistory(currentSession.messages);
 
       setInput('');
       setIsLoading(true);

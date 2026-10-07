@@ -25,7 +25,9 @@ import {
   Bug,
   AlertTriangle,
   Compass,
-  Bot
+  Bot,
+  Shirt,
+  Scissors
 } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { enhanceCameraImage, type EnhancementResult } from '../lib/imageEnhancer';
@@ -44,7 +46,7 @@ import {
   BatikCorner
 } from './BatikDecorations';
 
-export type EntityCategory = 'jentik_sarang' | 'manusia' | 'hewan' | 'benda_mati';
+export type EntityCategory = 'jentik_sarang' | 'vektor_istirahat' | 'manusia' | 'hewan' | 'benda_mati';
 
 export interface ScanFactorBreakdown {
   containerScore: number;
@@ -67,6 +69,9 @@ export interface ScanAnalysisResult {
   detectedObject: string;
   waterDetected: boolean;
   motilityDetected?: boolean;
+  lifeCycleStage?: 'dewasa_istirahat' | 'jentik_akuatik' | 'telur_dorman' | 'bukan_vektor';
+  cycleBreakerTitle?: string;
+  cycleBreakerDetail?: string;
   factors: ScanFactorBreakdown;
   scientificExplanation: string;
   actionSteps: string[];
@@ -82,7 +87,7 @@ interface CameraScannerProps {
 }
 
 const PHOTO_VISION_PROMPT = `Kamu adalah AI Pakar Entomologi, Vektor Penyakit Tropis, dan Computer Vision di Zero-G Mosquito.
-Tugasmu: Menganalisa foto yang dipindai kamera warga dan MEMBEDAKAN SECARA AKURAT jenis entitasnya:
+Tugasmu: Menganalisa foto yang dipindai kamera warga, MEMBEDAKAN SECARA AKURAT jenis entitasnya, dan MEMBERIKAN LOGIKA PEMUTUS SIKLUS HIDUP NYAMUK:
 
 ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
 - JIKA gambar gelap gulita, hitam, buram tanpa detail, kamera ditutup jari/tangan/meja, atau tidak tampak objek nyata:
@@ -92,45 +97,87 @@ ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
   * riskPercentage: 0
   * riskLevel: "Aman"
   * waterDetected: false
+  * lifeCycleStage: "bukan_vektor"
+  * cycleBreakerTitle: "Lensa Tertutup (Bukan Objek Nyata)"
+  * cycleBreakerDetail: "Pastikan kamera terbuka dan arahkan ke objek nyata."
   * factors: Semua skor 0 (containerScore: 0, waterStagnancyScore: 0, environmentScore: 0, debrisScore: 0)
-  * scientificExplanation: "Lensa kamera tertutup atau pencahayaan terlalu gelap. Tidak ada wadah air, genangan, ataupun jentik nyamuk yang terlihat."
-  * actionSteps: ["Buka penutup kamera atau bersihkan lensa.", "Arahkan kamera ke wadah air, ember, selokan, atau bak yang ingin diperiksa."]
-  * JANGAN PERNAH MENGASUMSIKAN ATAU MENGARANG ADA WADAH AIR / BAK MANDI JIKA OBJEK FISIK TIDAK TAMPAK JELAS!
+  * scientificExplanation: "Lensa kamera tertutup atau pencahayaan terlalu gelap. Tidak ada wadah air, genangan, ataupun sarang nyamuk yang terlihat."
+  * actionSteps: ["Buka penutup kamera atau bersihkan lensa.", "Arahkan kamera ke gantungan baju untuk memeriksa resting site, atau ke wadah air untuk memeriksa jentik."]
+  * JANGAN PERNAH MENGASUMSIKAN ATAU MENGARANG ADA WADAH AIR JIKA OBJEK FISIK TIDAK TAMPAK JELAS!
 
-TAHAP 1: KLASIFIKASI ENTITAS (entityCategory):
-Pilihlah salah satu dari 4 kategori berikut:
+TAHAP 1: KLASIFIKASI ENTITAS & SIKLUS HIDUP (entityCategory):
+Pilihlah salah satu dari 5 kategori berikut:
 1. "manusia" : Jika objek utama adalah manusia (wajah, tangan, kaki, orang dewasa, anak-anak, tubuh).
 2. "hewan" : Jika objek utama adalah hewan/binatang (kucing, anjing, burung, ikan hias di akuarium bersih, reptil, serangga selain nyamuk).
-3. "benda_mati" : Jika objek adalah barang/perabotan kering tanpa genangan air (laptop, buku, meja, pakaian, sepatu, smartphone, dinding, mobil/motor kering, layar gelap/tertutup).
-4. "jentik_sarang" : HANYA JIKA terlihat NYATA wadah air, genangan air, ember berair, selokan, talang berair, ban bekas berair, bak mandi dengan air terlihat jelas, atau jentik nyamuk.
+3. "vektor_istirahat" : JIKA OBJEK ADALAH GANTUNGAN BAJU, PAKAIAN KOTOR/BEKAS PAKAI DI BALIK PINTU/DINDING, TUMPUKAN KAIN, GORDEN GELAP, ATAU SUDUT LEMBAP BERKAIN.
+   * FAKTA ENTOMOLOGI MEDIS KRUSIAL: Ini adalah RESTING SITE (tempat peristirahatan) utama nyamuk Aedes aegypti dewasa (fase Imago). Nyamuk betina tertarik oleh aroma keringat/asam laktat tubuh manusia yang menempel di serat pakaian dan berlindung di lipatan kain gelap untuk mencerna darah serta mematangkan telur sebelum menularkan DBD ke anggota keluarga lain. Ini SANGAT BERBAHAYA dan BUKAN benda mati aman!
+4. "benda_mati" : HANYA jika barang kering keras netral NON-PAKAIAN (seperti laptop, buku, meja polos, lantai keramik kering, hp, mobil/motor kering, layar gelap/tertutup).
+5. "jentik_sarang" : HANYA JIKA terlihat wadah air, genangan air, ember berair, selokan, talang berair, ban bekas berair, bak mandi, pot air, atau jentik nyamuk (larva/pupa).
 
-TAHAP 2: ATURAN LOGIKA RISIKO & PERHITUNGAN:
-- JIKA BUKAN SARANG ("manusia", "hewan", atau "benda_mati"):
+TAHAP 2: ATURAN LOGIKA RISIKO & STRATEGI PEMUTUS SIKLUS HIDUP (Cycle Breaker):
+- JIKA "manusia", "hewan", atau "benda_mati":
   * isBreedingSite: false
   * riskPercentage: 0
   * riskLevel: "Aman"
   * waterDetected: false
-  * containerScore: 0, waterStagnancyScore: 0, environmentScore: 0, debrisScore: 0
-  * scientificExplanation: Berikan penjelasan ramah bahwa objek ini terdeteksi sebagai [manusia/hewan/benda mati/layar gelap] dan BUKAN habitat perindukan nyamuk.
-  * actionSteps: ["Objek aman.", "Arahkan kamera ke genangan air, ember, atau selokan jika ingin memindai jentik."]
+  * lifeCycleStage: "bukan_vektor"
+  * cycleBreakerTitle: "Objek Aman (Bukan Habitat Siklus Nyamuk)"
+  * cycleBreakerDetail: "Objek ini bukan habitat perindukan jentik maupun tempat istirahat nyamuk."
+  * factors: Semua skor 0
+  * scientificExplanation: Berikan penjelasan ramah bahwa objek ini terdeteksi sebagai [manusia/hewan/benda mati netral] dan bukan bagian dari habitat siklus hidup nyamuk.
+  * actionSteps: ["Objek aman.", "Arahkan kamera ke gantungan baju untuk memeriksa resting site, atau ke genangan air untuk memeriksa jentik."]
 
-- JIKA "jentik_sarang":
+- JIKA "vektor_istirahat" (Gantungan Baju / Tumpukan Kain):
+  * isBreedingSite: true (titik bahaya resting site vektor)
+  * waterDetected: false
+  * riskPercentage: 65 - 85% (Tergantung banyaknya tumpukan baju dan kegelapan ruangan)
+  * riskLevel: "Tinggi" atau "Sedang"
+  * lifeCycleStage: "dewasa_istirahat"
+  * cycleBreakerTitle: "Putus Siklus Nyamuk Dewasa (Resting Site Interruption)"
+  * cycleBreakerDetail: "Nyamuk Aedes betina membutuhkan kain bekas berbau keringat untuk beristirahat dan mematangkan telur setelah menggigit. Menghilangkan baju gantung akan memutus tempat berlindung nyamuk dewasa sehingga tidak bisa bertahan hidup di dalam rumah dan tidak sempat bertelur."
+  * factors:
+    1. Wadah/Penampung (containerScore: 0): "Bukan wadah air (fase terestrial dewasa)"
+    2. Stagnasi Air (waterStagnancyScore: 0): "Tidak ada genangan air"
+    3. Kondisi Lingkungan Teduh (environmentScore: 18 - 20): "Lipatan kain gelap dan teduh sangat disukai nyamuk Aedes beristirahat"
+    4. Seresah/Atraktan Organik (debrisScore: 9 - 10): "Aroma keringat, asam laktat, dan sebum pada pakaian bekas pakai adalah magnet penarik nyamuk DBD"
+  * scientificExplanation: "Gantungan pakaian bekas pakai adalah resting site (tempat peristirahatan) favorit nyamuk Aedes aegypti dewasa. Nyamuk berlindung di lipatan kain gelap setelah menghisap darah manusia untuk mencerna darah dan mematangkan telurnya sebelum mencari wadah air untuk bertelur."
+  * actionSteps: [
+      "Pindahkan pakaian kotor ke dalam keranjang tertutup atau langsung cuci dengan deterjen.",
+      "Hindari menggantung pakaian bekas pakai di belakang pintu kamar lebih dari 24 jam.",
+      "Buka jendela di siang hari agar sirkulasi udara dan cahaya matahari masuk (nyamuk menghindari angin dan cahaya terang).",
+      "Gunakan semprotan repelen alami atau raket nyamuk di sudut gantungan untuk membasmi nyamuk dewasa yang bersembunyi."
+    ]
+
+- JIKA "jentik_sarang" (Wadah Air / Genangan):
   * isBreedingSite: true
+  * waterDetected: true
+  * lifeCycleStage: "jentik_akuatik"
+  * cycleBreakerTitle: "Putus Siklus Jentik & Pupa (Aquatic Metamorphosis Interruption)"
+  * cycleBreakerDetail: "Siklus metamorfosis dari telur menjadi nyamuk dewasa membutuhkan waktu 7-10 hari di air. Menguras dan menyikat wadah seminggu sekali akan memusnahkan jentik sebelum sempat menjadi nyamuk dewasa terbang."
   * Hitung matematis skor (Total 0 - 100%):
     1. Wadah/Penampung (containerScore: 0 - 35%)
     2. Stagnasi Air (waterStagnancyScore: 0 - 35%)
     3. Kondisi Lingkungan Teduh (environmentScore: 0 - 20%)
     4. Seresah/Nutrisi Organik (debrisScore: 0 - 10%)
   * Tentukan riskLevel: 0-25 "Aman", 26-50 "Rendah", 51-70 "Sedang", 71-85 "Tinggi", 86-100 "Bahaya".
+  * actionSteps: [
+      "Kuras dan sikat dinding penampung air minimal 1x seminggu untuk merontokkan telur nyamuk.",
+      "Tutup rapat semua tempat penampungan air (tandon, gentong, ember).",
+      "Taburkan bubuk abate (larvasida) atau pelihara ikan pemakan jentik.",
+      "Balikkan atau daur ulang wadah bekas yang berpotensi menampung air hujan (3M Plus)."
+    ]
 
 Format respon HARUS berupa JSON valid dengan struktur:
 {
-  "entityCategory": "jentik_sarang" | "manusia" | "hewan" | "benda_mati",
+  "entityCategory": "jentik_sarang" | "vektor_istirahat" | "manusia" | "hewan" | "benda_mati",
   "isBreedingSite": boolean,
   "riskPercentage": number,
   "riskLevel": "Aman" | "Rendah" | "Sedang" | "Tinggi" | "Bahaya",
   "detectedObject": string,
   "waterDetected": boolean,
+  "lifeCycleStage": "dewasa_istirahat" | "jentik_akuatik" | "bukan_vektor",
+  "cycleBreakerTitle": string,
+  "cycleBreakerDetail": string,
   "factors": {
     "containerScore": number,
     "containerReason": string,
@@ -146,7 +193,7 @@ Format respon HARUS berupa JSON valid dengan struktur:
 }`;
 
 const VIDEO_VISION_PROMPT = `Kamu adalah AI Pakar Entomologi, Vektor Penyakit Tropis, dan Computer Vision di Zero-G Mosquito.
-Tugasmu: Menganalisa 3 FRAME TEMPORAL BERURUTAN (Frame 0s, Frame 1.5s, Frame 3s) dari rekaman video kamera warga.
+Tugasmu: Menganalisa 3 FRAME TEMPORAL BERURUTAN (Frame 0s, Frame 1.5s, Frame 3s) dari rekaman video kamera warga, membedakan entitas secara tajam, dan memberikan logika pemutus siklus hidup nyamuk:
 
 ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
 - JIKA frame gelap gulita, hitam, lensa tertutup jari/meja/benda, atau tidak tampak objek nyata:
@@ -157,30 +204,59 @@ ATURAN PALING KRUSIAL (ANTI-HALUSINASI & SENSOR TERTUTUP):
   * waterDetected: false
   * riskPercentage: 0
   * riskLevel: "Aman"
+  * lifeCycleStage: "bukan_vektor"
+  * cycleBreakerTitle: "Lensa Tertutup"
+  * cycleBreakerDetail: "Pastikan lensa terbuka."
   * factors: Semua skor 0 (containerScore: 0, waterStagnancyScore: 0, motilityScore: 0, environmentScore: 0, debrisScore: 0)
   * scientificExplanation: "Kamera tertutup atau frame terlalu gelap. Tidak ada genangan air ataupun motilitas jentik hidup."
-  * actionSteps: ["Pastikan lensa kamera tidak tertutup.", "Arahkan kamera ke air tenang/genangan untuk mendeteksi jentik nyamuk."]
+  * actionSteps: ["Pastikan lensa kamera tidak tertutup.", "Arahkan kamera ke gantungan baju atau air genangan."]
   * JANGAN PERNAH MENGARANG ADA SARANG/BAK MANDI PADA GAMBAR GELAP/TERTUTUP!
 
 TAHAP 1: KLASIFIKASI ENTITAS (entityCategory):
-Pilihlah salah satu dari 4 kategori berikut:
+Pilihlah salah satu dari 5 kategori berikut:
 1. "manusia" : Jika objek bergerak adalah manusia (orang berbicara, berjalan, melambaikan tangan, wajah).
 2. "hewan" : Jika objek bergerak adalah hewan/peliharaan (kucing bermain, ekor anjing bergerak, burung, ikan hias).
-3. "benda_mati" : Jika objek adalah benda mati kering tanpa air (alat elektronik, meja, perabotan, layar gelap/tertutup).
-4. "jentik_sarang" : HANYA JIKA terlihat genangan air, wadah berair, selokan, atau air berisi jentik.
+3. "vektor_istirahat" : JIKA OBJEK ADALAH GANTUNGAN BAJU, PAKAIAN KOTOR/BEKAS DI PINTU/DINDING, TUMPUKAN KAIN. Ini adalah RESTING SITE utama nyamuk Aedes aegypti dewasa. SANGAT BERBAHAYA untuk penularan DBD!
+4. "benda_mati" : Jika objek adalah benda mati kering keras tanpa air non-pakaian (alat elektronik, meja, kursi, keramik, layar gelap/tertutup).
+5. "jentik_sarang" : HANYA JIKA terlihat genangan air, wadah berair, selokan, atau air berisi jentik.
 
 TAHAP 2: ATURAN LOGIKA RISIKO & UJI GERAK JENTIK (Larvae Wriggle Test):
-- JIKA BUKAN SARANG ("manusia", "hewan", atau "benda_mati"):
+- JIKA "manusia", "hewan", atau "benda_mati":
   * isBreedingSite: false
   * motilityDetected: false
   * waterDetected: false
   * riskPercentage: 0
   * riskLevel: "Aman"
+  * lifeCycleStage: "bukan_vektor"
+  * cycleBreakerTitle: "Objek Aman"
+  * cycleBreakerDetail: "Bukan habitat nyamuk."
   * scientificExplanation: Gerakan temporal yang terdeteksi berasal dari [manusia/hewan/benda/noise sensor], bukan motilitas jentik nyamuk.
-  * actionSteps: ["Objek aman.", "Arahkan kamera ke air tenang/genangan untuk mendeteksi jentik nyamuk."]
+  * actionSteps: ["Objek aman.", "Arahkan kamera ke genangan air atau gantungan pakaian."]
+
+- JIKA "vektor_istirahat" (Gantungan Baju / Tumpukan Kain):
+  * isBreedingSite: true (titik bahaya resting site)
+  * waterDetected: false
+  * motilityDetected: false
+  * riskPercentage: 65 - 85%
+  * riskLevel: "Tinggi" atau "Sedang"
+  * lifeCycleStage: "dewasa_istirahat"
+  * cycleBreakerTitle: "Putus Siklus Nyamuk Dewasa (Resting Site Interruption)"
+  * cycleBreakerDetail: "Menghilangkan baju gantung memutus tempat istirahat & perlindungan nyamuk dewasa agar tidak bisa bertahan hidup di dalam rumah dan tidak sempat bertelur."
+  * factors: containerScore: 0, waterStagnancyScore: 0, motilityScore: 0, environmentScore: 10 (maks 10), debrisScore: 10 (maks 10)
+  * scientificExplanation: "Gantungan baju bekas pakai adalah resting site favorit nyamuk Aedes aegypti dewasa untuk mencerna darah sebelum mencari genangan air untuk bertelur."
+  * actionSteps: [
+      "Pindahkan pakaian kotor ke dalam keranjang tertutup atau langsung cuci.",
+      "Hindari menggantung pakaian bekas di kamar lebih dari 24 jam.",
+      "Buka ventilasi dan pencahayaan agar kamar terang dan berangin.",
+      "Gunakan perangkap nyamuk UV atau raket nyamuk di sudut gantungan."
+    ]
 
 - JIKA "jentik_sarang":
   * isBreedingSite: true
+  * waterDetected: true
+  * lifeCycleStage: "jentik_akuatik"
+  * cycleBreakerTitle: "Putus Siklus Jentik & Pupa (Aquatic Phase Interruption)"
+  * cycleBreakerDetail: "Kuras wadah minimal 1x seminggu untuk memutus siklus metamorfosis jentik (7-10 hari) sebelum berkembang menjadi nyamuk dewasa terbang."
   * Lakukan "Larvae Wriggle Test": amati apakah ada organisme mikro meliuk (S-shape wriggling) antar frame 1, 2, dan 3.
   * Hitung matematis skor (Total 0 - 100%):
     1. Wadah Buatan (containerScore: 0 - 25%)
@@ -189,16 +265,25 @@ TAHAP 2: ATURAN LOGIKA RISIKO & UJI GERAK JENTIK (Larvae Wriggle Test):
     4. Faktor Lingkungan Teduh (environmentScore: 0 - 10%)
     5. Nutrisi Organik (debrisScore: 0 - 10%)
   * Tentukan riskLevel: 0-25 "Aman", 26-50 "Rendah", 51-70 "Sedang", 71-85 "Tinggi", 86-100 "Bahaya".
+  * actionSteps: [
+      "Kuras dan sikat dinding penampung air minimal 1x seminggu.",
+      "Tutup rapat semua tempat penampungan air.",
+      "Taburkan bubuk abate atau pelihara ikan pemakan jentik.",
+      "Balikkan atau buang wadah bekas penampung air hujan (3M Plus)."
+    ]
 
 Format respon HARUS berupa JSON valid dengan struktur:
 {
-  "entityCategory": "jentik_sarang" | "manusia" | "hewan" | "benda_mati",
+  "entityCategory": "jentik_sarang" | "vektor_istirahat" | "manusia" | "hewan" | "benda_mati",
   "isBreedingSite": boolean,
   "riskPercentage": number,
   "riskLevel": "Aman" | "Rendah" | "Sedang" | "Tinggi" | "Bahaya",
   "detectedObject": string,
   "waterDetected": boolean,
   "motilityDetected": boolean,
+  "lifeCycleStage": "dewasa_istirahat" | "jentik_akuatik" | "bukan_vektor",
+  "cycleBreakerTitle": string,
+  "cycleBreakerDetail": string,
   "factors": {
     "containerScore": number,
     "containerReason": string,
@@ -445,36 +530,65 @@ export default function CameraScanner({
         throw lastErr || new Error('Gagal mendapatkan respon analisis dari AI Vision.');
       }
 
-      // Safeguard: If AI mistakenly marks a dark covered image or non-breeding site as breeding site
+      // Safeguard: Classify safe non-vector vs hazardous breeding & resting sites
       const isEntitySafe =
         parsed.entityCategory === 'manusia' ||
         parsed.entityCategory === 'hewan' ||
         parsed.entityCategory === 'benda_mati';
 
+      const isRestingSite = parsed.entityCategory === 'vektor_istirahat';
+
       const finalIsBreedingSite = isEntitySafe
         ? false
-        : (parsed.isBreedingSite !== undefined ? parsed.isBreedingSite : true);
+        : (isRestingSite ? true : (parsed.isBreedingSite !== undefined ? parsed.isBreedingSite : true));
 
-      const finalRiskPercentage = isEntitySafe ? 0 : (parsed.riskPercentage ?? 0);
-      const finalRiskLevel = isEntitySafe ? 'Aman' : (parsed.riskLevel || 'Aman');
+      const finalRiskPercentage = isEntitySafe
+        ? 0
+        : (parsed.riskPercentage ?? (isRestingSite ? 75 : 0));
+
+      const finalRiskLevel = isEntitySafe
+        ? 'Aman'
+        : (parsed.riskLevel || (isRestingSite ? 'Tinggi' : 'Aman'));
+
+      // Determine life cycle stage and cycle breaker strategy
+      let finalLifeCycleStage = parsed.lifeCycleStage;
+      let finalCycleBreakerTitle = parsed.cycleBreakerTitle;
+      let finalCycleBreakerDetail = parsed.cycleBreakerDetail;
+
+      if (isRestingSite) {
+        finalLifeCycleStage = 'dewasa_istirahat';
+        finalCycleBreakerTitle = finalCycleBreakerTitle || 'Putus Siklus Nyamuk Dewasa (Resting Site)';
+        finalCycleBreakerDetail = finalCycleBreakerDetail || 'Nyamuk betina dewasa memanfaatkan gantungan baju & tumpukan kain berbau keringat untuk beristirahat dan mematangkan telur. Menghilangkan baju gantung akan memutus tempat perlindungan nyamuk dewasa sehingga tidak bisa bertahan hidup di dalam rumah dan tidak sempat bertelur.';
+      } else if (parsed.entityCategory === 'jentik_sarang') {
+        finalLifeCycleStage = 'jentik_akuatik';
+        finalCycleBreakerTitle = finalCycleBreakerTitle || 'Putus Siklus Akuatik Jentik & Pupa (Metamorfosis)';
+        finalCycleBreakerDetail = finalCycleBreakerDetail || 'Siklus metamorfosis dari telur menjadi nyamuk dewasa membutuhkan waktu 7-10 hari di air. Menguras dan menyikat wadah seminggu sekali akan memusnahkan jentik sebelum sempat menjadi nyamuk dewasa terbang.';
+      } else {
+        finalLifeCycleStage = 'bukan_vektor';
+        finalCycleBreakerTitle = 'Objek Aman (Bukan Bagian Siklus Nyamuk)';
+        finalCycleBreakerDetail = 'Objek ini bukan habitat perindukan jentik maupun tempat istirahat nyamuk dewasa.';
+      }
 
       const result: ScanAnalysisResult = {
-        entityCategory: parsed.entityCategory || 'jentik_sarang',
+        entityCategory: parsed.entityCategory || (isRestingSite ? 'vektor_istirahat' : 'jentik_sarang'),
         isBreedingSite: finalIsBreedingSite,
         riskPercentage: finalRiskPercentage,
         riskLevel: finalRiskLevel,
-        detectedObject: parsed.detectedObject || 'Objek Terdeteksi',
+        detectedObject: parsed.detectedObject || (isRestingSite ? 'Gantungan Pakaian / Baju Bekas (Resting Site Nyamuk Dewasa)' : 'Objek Terdeteksi'),
         waterDetected: Boolean(parsed.waterDetected),
         motilityDetected: parsed.motilityDetected,
+        lifeCycleStage: finalLifeCycleStage,
+        cycleBreakerTitle: finalCycleBreakerTitle,
+        cycleBreakerDetail: finalCycleBreakerDetail,
         factors: parsed.factors || {
           containerScore: 0,
           containerReason: '-',
           waterStagnancyScore: 0,
           waterStagnancyReason: '-',
-          environmentScore: 0,
-          environmentReason: '-',
-          debrisScore: 0,
-          debrisReason: '-'
+          environmentScore: isRestingSite ? 18 : 0,
+          environmentReason: isRestingSite ? 'Lipatan pakaian gelap disukai nyamuk istirahat' : '-',
+          debrisScore: isRestingSite ? 10 : 0,
+          debrisReason: isRestingSite ? 'Aroma keringat manusia menarik nyamuk Aedes' : '-'
         },
         scientificExplanation: parsed.scientificExplanation || '',
         actionSteps: parsed.actionSteps || [],
@@ -853,6 +967,13 @@ export default function CameraScanner({
             <span>Terdeteksi Benda Mati Kering (Aman)</span>
           </div>
         );
+      case 'vektor_istirahat':
+        return (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/80 border border-rose-400/50 text-rose-300 text-xs font-semibold shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse">
+            <Shirt size={13} className="text-rose-400" />
+            <span>Resting Site Nyamuk Dewasa (Gantungan Baju / Pakaian) - Bahaya DBD</span>
+          </div>
+        );
       case 'jentik_sarang':
       default:
         return (
@@ -1220,6 +1341,74 @@ export default function CameraScanner({
               <div>
                 <span className="font-bold">Objek Aman Terkonfirmasi: </span>
                 Sistem mengidentifikasi ini sebagai <strong>{analysisResult.detectedObject}</strong>, bukan genangan air ataupun sarang nyamuk. Tidak ada potensi vektor penyakit di titik ini.
+              </div>
+            </div>
+          )}
+
+          {/* MOSQUITO LIFE-CYCLE BREAKER MODULE (Memutus Siklus Hidup Nyamuk) */}
+          {analysisResult.lifeCycleStage && analysisResult.lifeCycleStage !== 'bukan_vektor' && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-950/70 via-slate-900/80 to-amber-950/60 border border-teal-500/30 space-y-3 shadow-lg">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
+                  <Scissors size={15} className="text-teal-400" />
+                  <span>Logika Pemutus Siklus Hidup Nyamuk</span>
+                </div>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-teal-500/20 text-teal-200 border border-teal-500/40">
+                  Target Intervensi: {analysisResult.lifeCycleStage === 'dewasa_istirahat' ? 'Fase Nyamuk Dewasa (Imago)' : 'Fase Jentik / Pupa (Air)'}
+                </span>
+              </div>
+
+              {/* Visual 4-Stage Life Cycle Pipeline */}
+              <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] py-1">
+                {/* 1. Telur */}
+                <div className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  analysisResult.lifeCycleStage === 'telur_dorman'
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold shadow-[0_0_10px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/50'
+                    : 'bg-white/5 border-white/5 text-slate-400'
+                }`}>
+                  <span className="text-xs">🥚 Telur</span>
+                  <span className="text-[8px] opacity-75">Tahan Kering</span>
+                </div>
+
+                {/* 2. Jentik */}
+                <div className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  analysisResult.lifeCycleStage === 'jentik_akuatik'
+                    ? 'bg-rose-500/25 border-rose-400 text-rose-200 font-bold shadow-[0_0_12px_rgba(244,63,94,0.4)] ring-1 ring-rose-400/50'
+                    : 'bg-white/5 border-white/5 text-slate-400'
+                }`}>
+                  <span className="text-xs">🐛 Jentik</span>
+                  <span className="text-[8px] opacity-75">Air 6-8 Hari</span>
+                </div>
+
+                {/* 3. Pupa */}
+                <div className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  analysisResult.lifeCycleStage === 'jentik_akuatik'
+                    ? 'bg-rose-500/20 border-rose-400/70 text-rose-200 font-semibold'
+                    : 'bg-white/5 border-white/5 text-slate-400'
+                }`}>
+                  <span className="text-xs">🫧 Pupa</span>
+                  <span className="text-[8px] opacity-75">Air 1-2 Hari</span>
+                </div>
+
+                {/* 4. Dewasa (Gantungan Baju) */}
+                <div className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  analysisResult.lifeCycleStage === 'dewasa_istirahat'
+                    ? 'bg-rose-500/30 border-rose-400 text-rose-200 font-bold shadow-[0_0_14px_rgba(244,63,94,0.5)] ring-1 ring-rose-400'
+                    : 'bg-white/5 border-white/5 text-slate-400'
+                }`}>
+                  <span className="text-xs">🦟 Dewasa</span>
+                  <span className="text-[8px] opacity-75">Baju Gantung</span>
+                </div>
+              </div>
+
+              {/* Cycle Breaker Detail Explanation Box */}
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 text-xs text-slate-200 leading-relaxed space-y-1">
+                <p className="font-semibold text-teal-300 text-[11px] flex items-center gap-1.5">
+                  <span className="text-amber-400">⚡</span> {analysisResult.cycleBreakerTitle || 'Strategi Pemutus Rantai Vektor:'}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  {analysisResult.cycleBreakerDetail}
+                </p>
               </div>
             </div>
           )}
