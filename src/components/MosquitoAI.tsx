@@ -316,7 +316,17 @@ async function searchInternet(query: string): Promise<string | null> {
   }
 }
 
-export default function MosquitoAI() {
+export interface MosquitoAIProps {
+  initialPrompt?: string;
+  initialAttachment?: ChatAttachment | null;
+  onClearInitial?: () => void;
+}
+
+export default function MosquitoAI({
+  initialPrompt,
+  initialAttachment,
+  onClearInitial
+}: MosquitoAIProps = {}) {
   // Persistent multi-session management
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     const loaded = loadAllSessions();
@@ -337,16 +347,28 @@ export default function MosquitoAI() {
     return '';
   });
 
-  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(initialAttachment || null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStatusText, setLoadingStatusText] = useState('Sedang menganalisis jawaban...');
   const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialAttachment) {
+      setSelectedAttachment(initialAttachment);
+    }
+    if (initialPrompt) {
+      setInput(initialPrompt);
+    }
+    if (initialPrompt || initialAttachment) {
+      onClearInitial?.();
+    }
+  }, [initialPrompt, initialAttachment, onClearInitial]);
 
   // Active session and messages derivation (guaranteed at least 1 session in state)
   const currentSession =

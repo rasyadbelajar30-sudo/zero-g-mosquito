@@ -20,7 +20,8 @@ import {
   parseReportStatus,
   isReportCleaned,
   estimateLocationName,
-  isJunkReport
+  isJunkReport,
+  getDeletedReportIds
 } from '../lib/reportData';
 import { playTapSound, triggerHaptic } from '../lib/soundFx';
 import { BatikKawungPattern, BatikCorner } from './BatikDecorations';
@@ -35,6 +36,7 @@ interface SanitationDataTableProps {
   onViewPhoto: (report: MosquitoReport) => void;
   onCopyCoord: (reportId: string, lat: number, lng: number) => void;
   copiedReportId: string | null;
+  initialExpanded?: boolean;
 }
 
 export default function SanitationDataTable({
@@ -46,10 +48,11 @@ export default function SanitationDataTable({
   onQuickToggleClean,
   onViewPhoto,
   onCopyCoord,
-  copiedReportId
+  copiedReportId,
+  initialExpanded = false
 }: SanitationDataTableProps) {
   // Accordion drop state: collapsed by default or openable on demand
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(initialExpanded);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'danger' | 'cleaned'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'distance'>('newest');
@@ -57,7 +60,8 @@ export default function SanitationDataTable({
 
   // Filter out anomalies / dummy junk from the active list
   const sanitizedReports = useMemo(() => {
-    return reports.filter((r) => !isJunkReport(r));
+    const deletedIds = getDeletedReportIds();
+    return reports.filter((r) => !isJunkReport(r) && !(r.id && deletedIds.has(r.id)));
   }, [reports]);
 
   // Distance helper

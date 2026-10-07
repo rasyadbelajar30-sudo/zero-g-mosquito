@@ -13,7 +13,8 @@ import {
   PlusCircle,
   X,
   MapPin,
-  Sparkles
+  Sparkles,
+  Bot
 } from 'lucide-react';
 import { BatikKawungPattern, BatikCorner } from './BatikDecorations';
 import { playTapSound, triggerHaptic } from '../lib/soundFx';
@@ -21,8 +22,8 @@ import { playTapSound, triggerHaptic } from '../lib/soundFx';
 export interface FeatureMenuModalProps {
   isOpen: boolean;
   onClose: () => void;
-  activeTab: 'radar' | 'camera' | 'account';
-  onNavigateTab: (tab: 'radar' | 'camera' | 'account') => void;
+  activeTab: 'radar' | 'camera' | 'chat' | 'data' | 'account';
+  onNavigateTab: (tab: 'radar' | 'camera' | 'chat' | 'data' | 'account') => void;
   onOpenTelemetryTable: () => void;
   onLocateMe: () => void;
   onFitAllReports: () => void;
@@ -138,7 +139,7 @@ export default function FeatureMenuModal({
             <span>1. Modul Utama Sistem</span>
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {/* Tab 1: Radar Map */}
             <button
               type="button"
@@ -194,12 +195,72 @@ export default function FeatureMenuModal({
                   AI Scanner Jentik
                 </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  Kamera visi komputer & Gemini AI deteksi jentik otomatis.
+                  Kamera visi komputer & deteksi motilitas larva dari galeri/HP.
                 </p>
               </div>
             </button>
 
-            {/* Tab 3: Account & Profile */}
+            {/* Tab 3: AI Consultation & Chat */}
+            <button
+              type="button"
+              onClick={() => handleAction(() => onNavigateTab('chat'))}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 group ${
+                activeTab === 'chat'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                  : 'bg-slate-950/60 border-white/10 hover:border-white/20 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
+                  <Bot size={16} />
+                </div>
+                {activeTab === 'chat' && (
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-400 text-slate-950">
+                    AKTIF
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="font-bold text-xs text-white group-hover:text-teal-300 transition-colors">
+                  Konsultasi AI Gemini
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Tanya jawab pakar entomologi, tips abate, & diagnosa foto.
+                </p>
+              </div>
+            </button>
+
+            {/* Tab 4: Data Sanitasi */}
+            <button
+              type="button"
+              onClick={() => handleAction(() => onNavigateTab('data'))}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 group ${
+                activeTab === 'data'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                  : 'bg-slate-950/60 border-white/10 hover:border-white/20 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <TableIcon size={16} />
+                </div>
+                {activeTab === 'data' && (
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-400 text-slate-950">
+                    AKTIF
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="font-bold text-xs text-white group-hover:text-emerald-300 transition-colors">
+                  Data Sanitasi & Laporan
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Tabel pemantauan titik bahaya, aksi bersih, & verifikasi.
+                </p>
+              </div>
+            </button>
+
+            {/* Tab 5: Account & Profile */}
             <button
               type="button"
               onClick={() => handleAction(() => onNavigateTab('account'))}

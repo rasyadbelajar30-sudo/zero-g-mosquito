@@ -24,7 +24,8 @@ import {
   Package,
   Bug,
   AlertTriangle,
-  Compass
+  Compass,
+  Bot
 } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { enhanceCameraImage, type EnhancementResult } from '../lib/imageEnhancer';
@@ -77,6 +78,7 @@ interface CameraScannerProps {
   currentUser?: UserProfile | null;
   onPinToRadar: (newReport: MosquitoReport) => void;
   onNavigateToRadar: () => void;
+  onConsultAI?: (data: { photoUrl?: string; summary: string; explanation?: string }) => void;
 }
 
 const PHOTO_VISION_PROMPT = `Kamu adalah AI Pakar Entomologi, Vektor Penyakit Tropis, dan Computer Vision di Zero-G Mosquito.
@@ -216,11 +218,13 @@ Format respon HARUS berupa JSON valid dengan struktur:
 export default function CameraScanner({
   currentUser,
   onPinToRadar,
-  onNavigateToRadar
+  onNavigateToRadar,
+  onConsultAI
 }: CameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const fallbackCameraInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   // Modes: Photo vs 3-second Video Burst
@@ -569,6 +573,8 @@ export default function CameraScanner({
     } catch (err) {
       console.error(err);
       setIsScanning(false);
+    } finally {
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -621,6 +627,8 @@ export default function CameraScanner({
     } catch (err) {
       console.error(err);
       setIsScanning(false);
+    } finally {
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -858,12 +866,11 @@ export default function CameraScanner({
 
   return (
     <div className="relative w-full max-w-2xl mx-auto flex flex-col items-center">
-      {/* Hidden File Inputs */}
+      {/* Hidden File Inputs: Gallery & Folder Selection (NO capture attribute) */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handlePhotoUpload}
       />
@@ -871,9 +878,17 @@ export default function CameraScanner({
         ref={videoFileInputRef}
         type="file"
         accept="video/*"
-        capture="environment"
         className="hidden"
         onChange={handleVideoUpload}
+      />
+      {/* Fallback Direct Camera Capture Input (WITH capture) */}
+      <input
+        ref={fallbackCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoUpload}
       />
 
       {/* Mode Switcher Pill */}
@@ -971,19 +986,34 @@ export default function CameraScanner({
               {scanMode === 'video' ? <Video size={32} /> : <Camera size={32} />}
             </div>
             <p className="text-sm max-w-xs">{cameraError || 'Menghubungkan ke sensor kamera...'}</p>
-            <button
-              type="button"
-              onClick={() => {
-                if (scanMode === 'video') {
-                  videoFileInputRef.current?.click();
-                } else {
-                  fileInputRef.current?.click();
-                }
-              }}
-              className="bg-teal-500 text-slate-950 px-5 py-2.5 rounded-full font-semibold text-xs tracking-wider uppercase flex items-center gap-2 hover:bg-teal-400 transition-all cursor-pointer"
-            >
-              <Upload size={16} /> Buka Kamera HP ({scanMode === 'video' ? 'Video' : 'Foto'})
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (scanMode === 'video') {
+                    videoFileInputRef.current?.click();
+                  } else {
+                    fallbackCameraInputRef.current?.click();
+                  }
+                }}
+                className="bg-teal-500 text-slate-950 px-4 py-2 rounded-full font-semibold text-xs tracking-wider uppercase flex items-center gap-2 hover:bg-teal-400 transition-all cursor-pointer"
+              >
+                <Camera size={15} /> Buka Kamera HP
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (scanMode === 'video') {
+                    videoFileInputRef.current?.click();
+                  } else {
+                    fileInputRef.current?.click();
+                  }
+                }}
+                className="bg-slate-800 text-slate-200 border border-white/10 px-4 py-2 rounded-full font-semibold text-xs tracking-wider uppercase flex items-center gap-2 hover:bg-slate-700 transition-all cursor-pointer"
+              >
+                <Upload size={15} /> Pilih dari Galeri / Folder
+              </button>
+            </div>
           </div>
         )}
 
@@ -1396,6 +1426,25 @@ export default function CameraScanner({
                 <ShieldCheck size={18} />
                 <span>Titik Aman — Tidak Perlu Disematkan ke Radar</span>
               </div>
+            )}
+
+            {/* Direct Bridge from AI Photo to AI Chat */}
+            {onConsultAI && (
+              <button
+                type="button"
+                onClick={() => {
+                  const currentPhoto = capturedFrames[activeFrameIndex] || capturedFrames[0];
+                  onConsultAI({
+                    photoUrl: currentPhoto,
+                    summary: `${analysisResult.riskLevel} (${analysisResult.riskPercentage}% - ${analysisResult.detectedObject})`,
+                    explanation: analysisResult.scientificExplanation
+                  });
+                }}
+                className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(20,184,166,0.35)] transition-all cursor-pointer text-xs sm:text-sm border border-emerald-300/30 active:scale-[0.98]"
+              >
+                <Bot size={18} className="text-emerald-200" />
+                <span>💬 Tanya AI Chat Seputar Hasil Foto Ini</span>
+              </button>
             )}
 
             <button

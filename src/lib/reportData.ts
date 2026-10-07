@@ -273,17 +273,33 @@ export function isJunkReport(report: MosquitoReport): boolean {
     return true;
   }
 
-  // 3. Junk or test strings in status/summary
+  // 3. Junk or legacy test strings in status/summary
   if (report.status) {
-    const raw = report.status.toLowerCase();
+    const raw = report.status.toLowerCase().trim();
     if (
+      raw === 'pending' ||
+      raw === 'verified' ||
       raw.includes('test_insert') ||
       raw.includes('30kb payload') ||
       raw.includes('dummy') ||
       raw.includes('asdasd') ||
-      raw.includes('testing payload')
+      raw.includes('testing payload') ||
+      raw.includes('human subject')
     ) {
       return true;
+    }
+  }
+
+  // 4. Legacy development mock reports created prior to 2026-10-06
+  if (report.created_at) {
+    try {
+      const createdAtTime = new Date(report.created_at).getTime();
+      // Oct 6, 2026 00:00:00 UTC = 1791244800000
+      if (createdAtTime < 1791244800000) {
+        return true;
+      }
+    } catch {
+      // ignore
     }
   }
 

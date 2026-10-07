@@ -39,8 +39,11 @@ import {
   Edit3,
   ArrowRight,
   Sparkles,
-  Grid
+  Grid,
+  Bot,
+  Table as TableIcon
 } from 'lucide-react';
+import { type ChatAttachment } from './lib/chatStorage';
 import AuthModal from './components/AuthModal';
 import LoginPage from './components/LoginPage';
 import CleaningReportModal from './components/CleaningReportModal';
@@ -286,11 +289,15 @@ function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'radar' | 'camera' | 'account'>(() => {
-    if (window.location.search.includes('tab=camera')) return 'camera';
+  const [activeTab, setActiveTab] = useState<'radar' | 'camera' | 'chat' | 'data' | 'account'>(() => {
+    if (window.location.search.includes('tab=camera') || window.location.search.includes('tab=vision')) return 'camera';
+    if (window.location.search.includes('tab=chat')) return 'chat';
+    if (window.location.search.includes('tab=data') || window.location.search.includes('tab=table')) return 'data';
     if (window.location.search.includes('tab=account') || window.location.search.includes('tab=login')) return 'account';
     return 'radar';
   });
+  const [chatInitialPrompt, setChatInitialPrompt] = useState<string | undefined>(undefined);
+  const [chatInitialAttachment, setChatInitialAttachment] = useState<ChatAttachment | null>(null);
   const [reports, setReports] = useState<MosquitoReport[]>(() => getCachedReports());
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [msg, setMsg] = useState('');
@@ -575,10 +582,13 @@ export default function App() {
   };
 
   // Progressive enhancement: View Transitions API for buttery smooth tab switching
-  const switchTab = (newTab: 'radar' | 'camera' | 'account') => {
+  const switchTab = useCallback((newTab: 'radar' | 'camera' | 'chat' | 'data' | 'account') => {
     if (newTab === activeTab) return;
     playTapSound();
     triggerHaptic(12);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
     if (typeof document !== 'undefined' && 'startViewTransition' in document) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (document as any).startViewTransition(() => {
@@ -587,7 +597,33 @@ export default function App() {
     } else {
       setActiveTab(newTab);
     }
-  };
+  }, [activeTab]);
+
+  const handleConsultAIFromPhoto = useCallback((data: { photoUrl?: string; summary: string; explanation?: string }) => {
+    playTapSound();
+    triggerHaptic(20);
+
+    let attachment: ChatAttachment | null = null;
+    if (data.photoUrl) {
+      let base64 = data.photoUrl;
+      if (base64.includes('base64,')) {
+        base64 = base64.split('base64,')[1];
+      }
+      attachment = {
+        name: 'hasil_scan_jentik.jpg',
+        type: 'image/jpeg',
+        size: Math.round(data.photoUrl.length * 0.75),
+        previewUrl: data.photoUrl,
+        data: base64
+      };
+    }
+
+    setChatInitialAttachment(attachment);
+    setChatInitialPrompt(
+      `Halo Pakar AI, saya baru memindai objek dengan hasil: "${data.summary}". Mohon berikan penjelasan mendalam mengenai resiko vektor nyamuknya dan langkah pembasmian paling aman & efektif.`
+    );
+    switchTab('chat');
+  }, [switchTab]);
 
   const handleManualSync = async () => {
     if (!isOnline) {
@@ -1160,7 +1196,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => switchTab('radar')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'radar'
                   ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -1172,19 +1208,43 @@ export default function App() {
             <button
               type="button"
               onClick={() => switchTab('camera')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'camera'
                   ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Camera size={14} />
-              <span>AI Scanner</span>
+              <span>AI Vision</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('chat')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'chat'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Bot size={14} />
+              <span>AI Chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('data')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'data'
+                  ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <TableIcon size={14} />
+              <span>Data Sanitasi</span>
             </button>
             <button
               type="button"
               onClick={() => switchTab('account')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === 'account'
                   ? 'bg-emerald-500 text-slate-950 font-bold shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -2407,28 +2467,34 @@ export default function App() {
                 </MapContainer>
               </div>
 
-              {/* TABEL INFORMASI REALTIME: Data Pemantauan Sanitasi & Titik Bahaya */}
-              <SanitationDataTable
-                reports={reports}
-                userLocation={userLocation}
-                selectedReportId={selectedReportId}
-                onSelectReport={handleSelectReport}
-                onEditReport={(r) => {
-                  setEditingReport(r);
-                  playTapSound();
-                }}
-                onQuickToggleClean={handleQuickToggleClean}
-                onViewPhoto={(r) => {
-                  const meta = parseReportStatus(r.status);
-                  const img = meta.fieldPhoto || meta.cleanedPhoto;
-                  if (img) {
-                    setLightboxPhoto(img);
-                    playTapSound();
-                  }
-                }}
-                onCopyCoord={handleCopyCoord}
-                copiedReportId={copiedReportId}
-              />
+              {/* SHORTCUT BANNER KE HALAMAN DATA SANITASI */}
+              <div className="glass-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-500/20 shadow-xl relative overflow-hidden">
+                <BatikKawungPattern opacity={0.05} className="text-emerald-400 pointer-events-none" />
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                    <TableIcon size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Tabel Data Sanitasi & Laporan</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                        {reports.length} Titik
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Lihat rincian lengkap titik bahaya, foto lapangan, dan verifikasi pembersihan warga.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => switchTab('data')}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 shrink-0 relative z-10"
+                >
+                  <span>Buka Halaman Data</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
 
               {/* Professional Civic Action Card with Batik Motif: Lapor Temuan Genangan Air */}
               <div className="rounded-2xl p-5 sm:p-6 relative overflow-hidden space-y-4 bg-gradient-to-br from-[#0c2016] via-[#07150f] to-[#040a07] border border-amber-500/25 shadow-2xl">
@@ -2569,9 +2635,32 @@ export default function App() {
               </div>
             </div>
 
-            {/* AI Expert Consultation Panel */}
-            <div className="fade-in-up">
-              <MosquitoAI />
+            {/* Shortcut ke Halaman AI Konsultasi */}
+            <div className="glass-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-teal-500/20 shadow-xl relative overflow-hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0">
+                  <Bot size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Tanya Pakar Entomologi AI</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-mono font-bold">
+                      GEMINI 3.5
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Konsultasi pencegahan DBD, abate, dan penanganan genangan air secara personal.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => switchTab('chat')}
+                className="px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 shrink-0"
+              >
+                <span>Mulai Konsultasi</span>
+                <ArrowRight size={14} />
+              </button>
             </div>
             </div>
 
@@ -2698,7 +2787,7 @@ export default function App() {
                 <span className="leading-tight">AI Vision Sarang & Jentik</span>
               </h2>
               <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto leading-relaxed">
-                Pindai wadah genangan air via Foto Statis atau Video 3s untuk mendeteksi motilitas gerakan jentik hidup.
+                Pindai wadah genangan air via Foto Galeri atau Kamera HP untuk mendeteksi larva jentik secara otomatis.
               </p>
             </div>
 
@@ -2706,11 +2795,74 @@ export default function App() {
               currentUser={user}
               onPinToRadar={handlePinFromCamera}
               onNavigateToRadar={() => switchTab('radar')}
+              onConsultAI={handleConsultAIFromPhoto}
             />
           </div>
         )}
 
-        {/* TAB 3: DEDICATED HALAMAN LOGIN & AKUN SAYA (TOKOPEDIA-STYLE) */}
+        {/* TAB 3: DEDICATED AI CONSULTATION & CHAT ASSISTANT */}
+        {activeTab === 'chat' && (
+          <div key="chat-tab" className="tab-transition py-2 space-y-4">
+            <div className="text-center max-w-md mx-auto mb-2 px-2">
+              <h2 className="text-lg sm:text-2xl font-bold tracking-tight text-white flex items-center justify-center gap-2">
+                <Bot size={22} className="text-emerald-400 shrink-0" />
+                <span>Konsultasi Pakar AI Entomologi</span>
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto leading-relaxed">
+                Tanya jawab interaktif dengan Gemini AI seputar pencegahan DBD, abate, sanitasi, dan analisa foto.
+              </p>
+            </div>
+
+            <MosquitoAI
+              initialPrompt={chatInitialPrompt}
+              initialAttachment={chatInitialAttachment}
+              onClearInitial={() => {
+                setChatInitialPrompt(undefined);
+                setChatInitialAttachment(null);
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB 4: DEDICATED DATA SANITASI & TITIK BAHAYA */}
+        {activeTab === 'data' && (
+          <div key="data-tab" className="tab-transition py-2 space-y-4">
+            <div className="text-center max-w-md mx-auto mb-2 px-2">
+              <h2 className="text-lg sm:text-2xl font-bold tracking-tight text-white flex items-center justify-center gap-2">
+                <TableIcon size={20} className="text-emerald-400 shrink-0" />
+                <span>Pusat Data Sanitasi & Titik Bahaya</span>
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto leading-relaxed">
+                Pantau seluruh titik bahaya aktif, riwayat pembersihan warga, koordinat GPS, dan verifikasi lapangan.
+              </p>
+            </div>
+
+            <SanitationDataTable
+              reports={reports}
+              userLocation={userLocation}
+              selectedReportId={selectedReportId}
+              onSelectReport={handleSelectReport}
+              onEditReport={(r) => {
+                setEditingReport(r);
+                playTapSound();
+              }}
+              onQuickToggleClean={handleQuickToggleClean}
+              onViewPhoto={(r) => {
+                const meta = parseReportStatus(r.status);
+                const img = meta.fieldPhoto || meta.cleanedPhoto;
+                if (img) {
+                  setLightboxPhoto(img);
+                  playTapSound();
+                }
+              }}
+              onCopyCoord={handleCopyCoord}
+              copiedReportId={copiedReportId}
+              initialExpanded={true}
+            />
+          </div>
+        )}
+
+        {/* TAB 5: DEDICATED HALAMAN LOGIN & AKUN SAYA (TOKOPEDIA-STYLE) */}
         {activeTab === 'account' && (
           <div key="account-tab" className="tab-transition py-2">
             <LoginPage
@@ -2731,66 +2883,79 @@ export default function App() {
       </div>
 
       {/* MOBILE-FIRST PWA FLOATING BOTTOM NAVIGATION BAR (APPLE / LINEAR DESIGN - MOBILE ONLY) */}
-      <nav className="md:hidden fixed bottom-3 left-4 right-4 z-50 bg-slate-950/85 backdrop-blur-2xl border border-white/[0.08] px-3 py-2 flex items-center justify-around max-w-md mx-auto rounded-2xl sm:rounded-full shadow-[0_20px_45px_rgba(0,0,0,0.85),inset_0_1px_0_0_rgba(255,255,255,0.08)]">
+      <nav className="md:hidden fixed bottom-3 left-2 right-2 z-50 bg-slate-950/90 backdrop-blur-2xl border border-white/[0.08] px-2 py-1.5 flex items-center justify-around max-w-md mx-auto rounded-2xl shadow-[0_20px_45px_rgba(0,0,0,0.85),inset_0_1px_0_0_rgba(255,255,255,0.08)]">
         <button
           type="button"
           onClick={() => switchTab('radar')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-4 sm:px-5 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer active:scale-95 border ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 border ${
             activeTab === 'radar'
               ? 'text-emerald-300 font-bold bg-emerald-500/15 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
               : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
           }`}
         >
-          <Compass size={18} className={activeTab === 'radar' ? 'text-emerald-400' : ''} />
-          <span className="text-[10px] tracking-wide font-semibold">Radar Peta</span>
+          <Compass size={17} className={activeTab === 'radar' ? 'text-emerald-400' : ''} />
+          <span className="text-[9px] tracking-tight font-semibold">Radar</span>
         </button>
 
         <button
           type="button"
           onClick={() => switchTab('camera')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-4 sm:px-5 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer active:scale-95 border ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 border ${
             activeTab === 'camera'
               ? 'text-emerald-300 font-bold bg-emerald-500/15 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
               : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
           }`}
         >
           <div className="relative">
-            <Camera size={18} className={activeTab === 'camera' ? 'text-emerald-400' : ''} />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <Camera size={17} className={activeTab === 'camera' ? 'text-emerald-400' : ''} />
+            <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
-          <span className="text-[10px] tracking-wide font-semibold">AI Scanner</span>
+          <span className="text-[9px] tracking-tight font-semibold">Vision</span>
         </button>
 
         <button
           type="button"
-          onClick={() => {
-            setIsQuickActionSheetOpen(true);
-            playTapSound();
-            triggerHaptic(12);
-          }}
-          className="flex flex-col items-center gap-1 py-1.5 px-3 sm:px-4 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer active:scale-95 border text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]"
+          onClick={() => switchTab('chat')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 border ${
+            activeTab === 'chat'
+              ? 'text-emerald-300 font-bold bg-emerald-500/15 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+              : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
+          }`}
         >
-          <Grid size={18} className="text-amber-400" />
-          <span className="text-[10px] tracking-wide font-semibold">Menu</span>
+          <Bot size={17} className={activeTab === 'chat' ? 'text-emerald-400' : ''} />
+          <span className="text-[9px] tracking-tight font-semibold">AI Chat</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => switchTab('data')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 border ${
+            activeTab === 'data'
+              ? 'text-emerald-300 font-bold bg-emerald-500/15 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+              : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
+          }`}
+        >
+          <TableIcon size={17} className={activeTab === 'data' ? 'text-emerald-400' : ''} />
+          <span className="text-[9px] tracking-tight font-semibold">Data</span>
         </button>
 
         <button
           type="button"
           onClick={() => switchTab('account')}
-          className={`flex flex-col items-center gap-1 py-1.5 px-3 sm:px-4 rounded-xl sm:rounded-full transition-all duration-200 cursor-pointer active:scale-95 border ${
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 border ${
             activeTab === 'account'
               ? 'text-emerald-300 font-bold bg-emerald-500/15 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
               : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
           }`}
         >
           {user ? (
-            <div className="w-4.5 h-4.5 rounded-full bg-emerald-400 text-slate-950 font-black flex items-center justify-center text-[9px] shadow-sm">
+            <div className="w-4 h-4 rounded-full bg-emerald-400 text-slate-950 font-black flex items-center justify-center text-[8px] shadow-sm">
               {user.name.charAt(0).toUpperCase()}
             </div>
           ) : (
-            <User size={18} className={activeTab === 'account' ? 'text-emerald-400' : ''} />
+            <User size={17} className={activeTab === 'account' ? 'text-emerald-400' : ''} />
           )}
-          <span className="text-[10px] tracking-wide font-semibold">
+          <span className="text-[9px] tracking-tight font-semibold">
             {user ? 'Akun' : 'Masuk'}
           </span>
         </button>
