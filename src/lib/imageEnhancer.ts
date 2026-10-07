@@ -92,8 +92,13 @@ export async function enhanceCameraImage(
   const stdDev = Math.sqrt(varianceSum / sampleCount);
 
   // Black screen / covered camera detection:
-  // If average luminance is below 24, OR if average luminance is below 38 with almost zero contrast (stdDev < 7)
-  const isBlackScreen = avgLuminance < 22 || (avgLuminance < 36 && stdDev < 7 && maxLuminance < 50);
+  // ONLY trigger if the ENTIRE frame is truly pitch-black / covered lens with zero light and zero scene features:
+  // 1. Completely flat darkness (lens face down or finger on lens): avgLuminance < 8 AND maxLuminance < 22
+  // 2. Uniform dark sensor noise: avgLuminance < 14 AND stdDev < 4 AND maxLuminance < 28
+  // Real scenes with dark clothes, jackets, or dark corners always have ambient light or walls (maxLuminance > 35, stdDev > 6)
+  const isBlackScreen =
+    (avgLuminance < 8 && maxLuminance < 22) ||
+    (avgLuminance < 14 && stdDev < 4 && maxLuminance < 28);
 
   let wasEnhanced = false;
 
