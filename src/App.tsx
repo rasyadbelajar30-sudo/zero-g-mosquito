@@ -620,7 +620,7 @@ export default function App() {
 
     setChatInitialAttachment(attachment);
     setChatInitialPrompt(
-      `Halo Pakar AI, saya baru memindai objek dengan hasil: "${data.summary}". Mohon berikan penjelasan mendalam mengenai resiko vektor nyamuknya dan langkah pembasmian paling aman & efektif.`
+      `Halo Pakar AI, saya baru memindai objek dengan hasil: "${data.summary}". Mohon berikan penjelasan mendalam mengenai risiko vektor nyamuknya dan bagaimana cara memutus siklus hidup nyamuk secara tuntas di titik ini agar populasi nyamuk tidak berkembang biak lagi.`
     );
     switchTab('chat');
   }, [switchTab]);
