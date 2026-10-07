@@ -349,10 +349,8 @@ export default function CameraScanner({
     return () => clearInterval(timer);
   }, [isPlayingFrames, capturedFrames.length]);
 
-  // Camera stream init
-  useEffect(() => {
-    let isCancelled = false;
-
+  // Resilient Camera Stream Starter: guarantees video element gets stream and plays
+  const startCameraStream = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraActive(false);
       setCameraError(
@@ -361,52 +359,58 @@ export default function CameraScanner({
       return;
     }
 
-    navigator.mediaDevices
-      .getUserMedia({
+    try {
+      // If existing stream has active tracks, rebind to video element and resume playing
+      if (streamRef.current && streamRef.current.getTracks().some((t) => t.readyState === 'live')) {
+        if (videoRef.current) {
+          if (videoRef.current.srcObject !== streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+          }
+          await videoRef.current.play().catch(() => {});
+        }
+        setCameraActive(true);
+        setCameraError(null);
+        return;
+      }
+
+      // If tracks ended or no stream exists, stop any leftovers
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
         audio: false
-      })
-      .then(async (newStream) => {
-        if (isCancelled) {
-          newStream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach((t) => t.stop());
-        }
-
-        streamRef.current = newStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = newStream;
-          await videoRef.current.play().catch(() => {});
-        }
-
-        if (!isCancelled) {
-          setCameraActive(true);
-          setCameraError(null);
-        }
-      })
-      .catch(() => {
-        if (!isCancelled) {
-          setCameraActive(false);
-          setCameraError(
-            'Kamera tidak dapat diakses langsung. Anda bisa menggunakan tombol unggah/kamera bawaan HP di bawah.'
-          );
-        }
       });
 
+      streamRef.current = newStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      setCameraActive(true);
+      setCameraError(null);
+    } catch {
+      setCameraActive(false);
+      setCameraError(
+        'Kamera tidak dapat diakses langsung. Anda bisa menggunakan tombol unggah/kamera bawaan HP di bawah.'
+      );
+    }
+  }, [facingMode]);
+
+  useEffect(() => {
+    startCameraStream();
     return () => {
-      isCancelled = true;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [facingMode]);
+  }, [startCameraStream]);
 
   const toggleCameraFacing = () => {
     const nextMode = facingMode === 'environment' ? 'user' : 'environment';
@@ -622,6 +626,9 @@ export default function CameraScanner({
   const handleSnapPhoto = async () => {
     if (!videoRef.current || isScanning) return;
     try {
+      if (videoRef.current.paused || videoRef.current.ended) {
+        await videoRef.current.play().catch(() => {});
+      }
       setIsScanning(true);
       setScanStepText('Mengambil gambar & auto-enhance...');
       const enhanced = await captureFrameFromVideo(videoRef.current);
@@ -638,6 +645,9 @@ export default function CameraScanner({
   const handleRecordVideoBurst = async () => {
     if (!videoRef.current || isScanning || isRecording) return;
     try {
+      if (videoRef.current.paused || videoRef.current.ended) {
+        await videoRef.current.play().catch(() => {});
+      }
       setIsRecording(true);
       setCountdownSeconds(3);
 
@@ -930,6 +940,7 @@ export default function CameraScanner({
     setPinStatus('idle');
     setPinMessage('');
     setLandmarkInput('');
+    startCameraStream();
   };
 
   const getRiskColor = (level: string) => {
@@ -1049,16 +1060,16 @@ export default function CameraScanner({
 
       {/* Main Viewfinder Window - 100% Clean Optical Viewfinder (Zero Background Interference) */}
       <div className="relative w-full aspect-[4/5] sm:aspect-square bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center touch-pan-y select-none">
-        {/* Live Camera View (Pure crystal clear optical stream) */}
-        {capturedFrames.length === 0 && (
-          <video
-            ref={videoRef}
-            playsInline
-            autoPlay
-            muted
-            className={`w-full h-full object-cover pointer-events-none select-none ${cameraActive ? 'block' : 'hidden'}`}
-          />
-        )}
+        {/* Live Camera View (Pure crystal clear optical stream - permanently mounted) */}
+        <video
+          ref={videoRef}
+          playsInline
+          autoPlay
+          muted
+          className={`w-full h-full object-cover pointer-events-none select-none ${
+            cameraActive && capturedFrames.length === 0 ? 'block' : 'hidden'
+          }`}
+        />
 
         {/* Captured Freeze-frame Preview with Smooth Crossfade */}
         {capturedFrames.length > 0 && (
